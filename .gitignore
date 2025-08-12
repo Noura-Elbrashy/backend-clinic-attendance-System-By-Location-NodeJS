@@ -1,0 +1,38 @@
+# Node modules (حجمها كبير، تنزل أوتوماتيك من package.json)
+node_modules/
+
+# ملفات البيئة (تحتوي معلومات سرية زي مفاتيح API، كلمات السر)
+.env
+.env.local
+.env.development
+.env.production
+
+# ملفات الـ logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# مجلدات التخزين المؤقت (cache)
+.cache/
+dist/
+build/
+
+# ملفات نظام التشغيل (مؤقتة)
+.DS_Store
+Thumbs.db
+
+# مجلدات التغطية (Test coverage reports)
+coverage/
+
+# ملفات أو مجلدات خاصة بالـ IDE
+.vscode/
+.idea/
+
+# ملفات الترحيل (migration) لو ما تبغيش ترفعها
+migrations/
+
+# ملفات المصادقة (مثل jwt.private.key لو مخزنة في المشروع - ينصح لا)
+jwt.private.key
+jwt.public.key
