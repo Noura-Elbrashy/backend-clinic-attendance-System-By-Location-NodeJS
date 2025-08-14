@@ -1,138 +1,4 @@
 
-// const User = require('../models/User');
-// const Attendance = require('../models/Attendance');
-// const bcrypt = require('bcryptjs');
-
-// exports.getAllUsers = async (req, res) => {
-//   try {
-//     const users = await User.find().select('-password').populate('branches');
-//     res.json(users);
-//   } catch (err) {
-//     console.error('Error fetching users:', err);
-//     res.status(500).json({ message: 'Failed to fetch users', error: err.message });
-//   }
-// };
-
-// exports.getUserById = async (req, res) => {
-//   try {
-//     const user = await User.findById(req.params.id).select('-password').populate('branches');
-//     if (!user) {
-//       return res.status(404).json({ message: 'User not found' });
-//     }
-//     const attendance = await Attendance.find({ user: req.params.id }).populate('branch');
-//     res.json({ user, attendance });
-//   } catch (err) {
-//     console.error('Error fetching user:', err);
-//     res.status(500).json({ message: 'Failed to fetch user', error: err.message });
-//   }
-// };
-
-// exports.updateUser = async (req, res) => {
-//   try {
-//     const { name, email, branches, role, password, phone, address, salary, requiredWorkingDays, workingDaysNames, workingHoursPerDay, workStartTime, workEndTime, absenceDeductionRate } = req.body;
-//     const updateData = {
-//       name: name || undefined,
-//       email: email || undefined,
-//       role: role || undefined,
-//       branches: branches && Array.isArray(branches) ? branches : [],
-//       phone: phone || undefined,
-//       address: address || undefined,
-//       salary: salary ? Number(salary) : undefined,
-//       requiredWorkingDays: requiredWorkingDays ? Number(requiredWorkingDays) : undefined,
-//       workingDaysNames: workingDaysNames && Array.isArray(workingDaysNames) ? workingDaysNames : undefined,
-//       workingHoursPerDay: workingHoursPerDay ? Number(workingHoursPerDay) : undefined,
-//       workStartTime: workStartTime || undefined,
-//       workEndTime: workEndTime || undefined,
-//       absenceDeductionRate: absenceDeductionRate ? Number(absenceDeductionRate) : undefined,
-//     };
-//     if (password) {
-//       updateData.password = await bcrypt.hash(password, 10);
-//     }
-//     const user = await User.findByIdAndUpdate(
-//       req.params.id,
-//       { $set: updateData },
-//       { new: true }
-//     ).populate('branches');
-//     if (!user) {
-//       return res.status(404).json({ message: 'المستخدم غير موجود' });
-//     }
-//     res.json({ message: 'تم تحديث المستخدم', user });
-//   } catch (err) {
-//     console.error('خطأ في تحديث المستخدم:', err);
-//     res.status(500).json({ message: 'فشل تحديث المستخدم', error: err.message });
-//   }
-// };
-
-// exports.deleteUser = async (req, res) => {
-//   try {
-//     const user = await User.findByIdAndDelete(req.params.id);
-//     if (!user) {
-//       return res.status(404).json({ message: 'المستخدم غير موجود' });
-//     }
-//     res.json({ message: 'تم حذف المستخدم' });
-//   } catch (err) {
-//     console.error('خطأ في حذف المستخدم:', err);
-//     res.status(500).json({ message: 'فشل حذف المستخدم', error: err.message });
-//   }
-// };
-
-// exports.addFeedback = async (req, res) => {
-//   try {
-//     const { message, isWarning } = req.body;
-//     const user = await User.findByIdAndUpdate(
-//       req.params.id,
-//       { $push: { feedback: { message, isWarning } } },
-//       { new: true }
-//     );
-//     if (!user) {
-//       return res.status(404).json({ message: 'المستخدم غير موجود' });
-//     }
-//     res.json({ message: 'تم إضافة التعليق', user });
-//   } catch (err) {
-//     console.error('خطأ في إضافة التعليق:', err);
-//     res.status(500).json({ message: 'فشل إضافة التعليق', error: err.message });
-//   }
-// };
-
-// exports.getMonthlyReport = async (req, res) => {
-//   try {
-//     const { userId, year, month } = req.params;
-//     const startDate = new Date(year, month - 1, 1);
-//     const endDate = new Date(year, month, 0);
-//     const attendance = await Attendance.find({
-//       user: userId,
-//       checkInTime: { $gte: startDate, $lte: endDate },
-//     }).populate('branch');
-
-//     const daysInMonth = endDate.getDate();
-//     const workingDays = [];
-//     const holidays = [];
-//     const absences = [];
-
-//     for (let day = 1; day <= daysInMonth; day++) {
-//       const date = new Date(year, month - 1, day);
-//       const record = attendance.find(
-//         (r) => new Date(r.checkInTime).toDateString() === date.toDateString()
-//       );
-//       if (record) {
-//         if (record.dayStatus === 'working') workingDays.push(date);
-//         else if (record.dayStatus === 'holiday') holidays.push(date);
-//       } else {
-//         absences.push(date);
-//       }
-//     }
-
-//     res.json({
-//       workingDays: workingDays.length,
-//       holidays: holidays.length,
-//       absences: absences.length,
-//       records: attendance,
-//     });
-//   } catch (err) {
-//     console.error('خطأ في إنشاء التقرير:', err);
-//     res.status(500).json({ message: 'فشل إنشاء التقرير', error: err.message });
-//   }
-// };
 
 const User = require('../models/User');
 const Attendance = require('../models/Attendance');
@@ -142,13 +8,39 @@ const { sendAlert } = require('../config/nodemailer');
 
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select('-password').populate('branches');
-    res.json(users);
+    // نجيب الـ page و limit من الـ query string
+    let { page = 1, limit = 10 } = req.query;
+
+    // تحويلهم لأرقام
+    page = parseInt(page);
+    limit = parseInt(limit);
+
+    // حساب عدد العناصر اللي هنسيبها
+    const skip = (page - 1) * limit;
+
+    // جلب البيانات مع الباجينيشن
+    const users = await User.find()
+      .select('-password')
+      .populate('branches')
+      .skip(skip)
+      .limit(limit);
+
+    // إجمالي عدد المستخدمين (لإظهار عدد الصفحات)
+    const totalUsers = await User.countDocuments();
+
+    res.json({
+      totalUsers,
+      totalPages: Math.ceil(totalUsers / limit),
+      currentPage: page,
+      users
+    });
+
   } catch (err) {
     console.error('Error fetching users:', err);
     res.status(500).json({ message: 'Failed to fetch users', error: err.message });
   }
 };
+
 
 exports.getUserById = async (req, res) => {
   try {

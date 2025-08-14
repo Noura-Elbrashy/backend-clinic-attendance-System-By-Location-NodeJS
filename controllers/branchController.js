@@ -51,7 +51,7 @@
 //   }
 // };
 const Branch = require("../models/Branch");
-
+const User = require("../models/User");
 // ➕ إنشاء فرع جديد
 exports.createBranch = async (req, res) => {
   const { name, location, radius, allowedIPs } = req.body;
@@ -103,4 +103,27 @@ exports.deleteBranch = async (req, res) => {
     res.status(500).json({ message: "فشل في الحذف" });
   }
 };
+// 📄 جلب الفروع المخصصة للموظف
+exports.mybranches= async (req, res) => {
+  try {
+    console.log('User from request:', req.user); // للتشخيص
+    
+    const user = await User.findById(req.user._id).select('branches');
+    if (!user) {
+      return res.status(404).json({ message: "المستخدم غير موجود" });
+    }
 
+    console.log('User branches:', user.branches); // للتشخيص
+
+    const branches = await Branch.find({ _id: { $in: user.branches } });
+    
+    console.log('Found branches:', branches); // للتشخيص
+    
+    // الحل: أرجع البيانات في data object
+    res.json({ data: branches });
+    
+  } catch (err) {
+    console.error('getMyBranches error:', err); // للتشخيص
+    res.status(500).json({ message: "خطأ في تحميل الفروع المخصصة", error: err.message });
+  }
+};

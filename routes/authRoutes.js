@@ -16,7 +16,10 @@ const {
   registerUser,
   getProfile,
 //   activateAccount,
-  resendActivation
+  resendActivation,
+  forgotPassword,
+  resetPassword,
+   verifyResetToken,
 } = require("../controllers/authController");
 const { protect, adminOnly } = require("../middleware/auth");
 
@@ -25,5 +28,8 @@ router.post("/register", protect, adminOnly, registerUser);
 router.get("/profile", protect, getProfile);
 // router.post("/activate", activateAccount);
 router.post("/resend-activation/:userId", protect, adminOnly, resendActivation);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
+router.get('/verify-reset-token/:token', verifyResetToken); // إضافة route جديدة
 
 module.exports = router;
