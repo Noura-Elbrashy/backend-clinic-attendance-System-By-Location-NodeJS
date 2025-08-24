@@ -65,7 +65,7 @@ const User = require('../models/User');
 
 exports.getAllAttendance = async (req, res) => {
   try {
-    const { branch, page = 1, limit = 10, date } = req.query;
+    const { branch, page = 1, limit = 10, date, name } = req.query;
     const branches = branch ? await Branch.find({ _id: branch }) : await Branch.find();
     const result = [];
 
@@ -73,10 +73,19 @@ exports.getAllAttendance = async (req, res) => {
 
     for (const branch of branches) {
       let query = { branch: branch._id };
+
+      // Add date filter
       if (queryDate) {
         const startDate = new Date(queryDate.setHours(0, 0, 0, 0));
         const endDate = new Date(queryDate.setHours(23, 59, 59, 999));
         query.checkInTime = { $gte: startDate, $lte: endDate };
+      }
+
+      // Add name filter
+      if (name) {
+        const users = await User.find({ name: { $regex: name, $options: 'i' } }).select('_id');
+        const userIds = users.map(user => user._id);
+        query.user = { $in: userIds };
       }
 
       const attendance = await Attendance.find(query)

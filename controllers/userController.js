@@ -8,25 +8,39 @@ const { sendAlert } = require('../config/nodemailer');
 
 exports.getAllUsers = async (req, res) => {
   try {
-    // نجيب الـ page و limit من الـ query string
-    let { page = 1, limit = 10 } = req.query;
-
-    // تحويلهم لأرقام
+    let { page = 1, limit = 10, name, branch } = req.query;
     page = parseInt(page);
     limit = parseInt(limit);
-
-    // حساب عدد العناصر اللي هنسيبها
     const skip = (page - 1) * limit;
 
-    // جلب البيانات مع الباجينيشن
-    const users = await User.find()
+    // Build query object
+    let query = {};
+    if (name) {
+      // Trim and normalize spaces
+      const normalizedName = name.trim().replace(/\s+/g, ' ');
+      // Split search term into words
+      const words = normalizedName.split(' ').filter(word => word.length > 0);
+      // Create regex for each word
+      const regexConditions = words.map(word => ({
+        name: { $regex: word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' }
+      }));
+      // Use $and to ensure all words match (in any order)
+      query.$and = regexConditions.length > 0 ? regexConditions : [{ name: { $regex: normalizedName, $options: 'i' } }];
+    }
+    if (branch) {
+      query.branches = branch;
+    }
+
+    // Debug log
+    console.log('Employee filter query:', query);
+    const users = await User.find(query)
       .select('-password')
       .populate('branches')
       .skip(skip)
       .limit(limit);
+    console.log('Filtered users:', users.map(u => u.name));
 
-    // إجمالي عدد المستخدمين (لإظهار عدد الصفحات)
-    const totalUsers = await User.countDocuments();
+    const totalUsers = await User.countDocuments(query);
 
     res.json({
       totalUsers,
@@ -34,13 +48,11 @@ exports.getAllUsers = async (req, res) => {
       currentPage: page,
       users
     });
-
   } catch (err) {
     console.error('Error fetching users:', err);
     res.status(500).json({ message: 'Failed to fetch users', error: err.message });
   }
 };
-
 
 exports.getUserById = async (req, res) => {
   try {
@@ -293,14 +305,35 @@ exports.rejectDevice = async (req, res) => {
 };
 exports.getPendingDevices = async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
-    const users = await User.find({ 'registeredDevices.approved': false }).select('name email registeredDevices');
-    const pending = users.flatMap(u => u.registeredDevices.filter(d => !d.approved).map(d => ({ userId: u._id, userName: u.name, userEmail: u.email, deviceFingerprint: d.deviceFingerprint })));
+    const { page = 1, limit = 10, search} = req.query;
+    const query = { 'registeredDevices.approved': false };
+
+  // Add name or email filter
+ if (search) {
+      // Escape special regex characters in the search term
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.$or = [
+        { name: { $regex: escapedSearch, $options: 'i' } }, // Case-insensitive name search
+        { email: { $regex: escapedSearch, $options: 'i' } } // Case-insensitive email search
+      ];
+    }
+
+    const users = await User.find(query).select('name email registeredDevices branches').populate('branches');
+    const pending = users.flatMap(u => u.registeredDevices.filter(d => !d.approved).map(d => ({
+      userId: u._id,
+      userName: u.name,
+      userEmail: u.email,
+      deviceFingerprint: d.deviceFingerprint,
+      branches: u.branches // Include branches for display
+    })));
 
     const total = pending.length;
     const paginated = pending.slice((page - 1) * limit, page * limit);
 
-    res.json({ pendingDevices: paginated, pagination: { total, page: Number(page), pages: Math.ceil(total / limit) } });
+    res.json({
+      pendingDevices: paginated,
+      pagination: { total, page: Number(page), pages: Math.ceil(total / limit) }
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Error fetching pending devices' });
   }
