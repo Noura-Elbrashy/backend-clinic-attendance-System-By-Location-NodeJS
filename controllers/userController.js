@@ -1,5 +1,3 @@
-
-
 const User = require('../models/User');
 const Attendance = require('../models/Attendance');
 const bcrypt = require('bcryptjs');
@@ -159,6 +157,81 @@ exports.addFeedback = async (req, res) => {
   }
 };
 
+// exports.getMonthlyReport = async (req, res) => {
+//   try {
+//     const { userId, year, month } = req.params;
+//     const startDate = new Date(year, month - 1, 1);
+//     const endDate = new Date(year, month, 0);
+//     const daysInMonth = endDate.getDate();
+
+//     const user = await User.findById(userId);
+//     if (!user) return res.status(404).json({ message: 'User not found' });
+
+//     const attendance = await Attendance.find({
+//       user: userId,
+//       checkInTime: { $gte: startDate, $lte: endDate },
+//     }).populate('branch');
+
+//     const workingDays = [];
+//     const holidays = [];
+//     const absences = [];
+//     let totalLateMinutes = 0;
+//     let totalEarlyLeaveMinutes = 0;
+
+
+//     let expectedWorkingDaysInMonth = 0;
+//     for (let day = 1; day <= daysInMonth; day++) {
+//       const date = new Date(year, month - 1, day);
+//       const dayName = date.toLocaleString('en-us', { weekday: 'long' });
+//       // if (!user.workingDaysNames.includes(dayName)) continue; // Skip non-working days
+      
+// // إذا كان اليوم في workingDaysNames، زِد العداد
+//         if (user.workingDaysNames.includes(dayName)) {
+//           expectedWorkingDaysInMonth++;
+//         } else {
+//           continue; // تخطي الأيام غير العاملة (مثل الجمعة/السبت إذا لم تكن في workingDaysNames)
+//         }
+//       const record = attendance.find(
+//         (r) => new Date(r.checkInTime).toDateString() === date.toDateString()
+//       );
+//       if (record) {
+//         if (record.dayStatus === 'working') {
+//           workingDays.push(date);
+//           totalLateMinutes += record.lateMinutes || 0;
+//           totalEarlyLeaveMinutes += record.earlyLeaveMinutes || 0;
+//         } else if (record.dayStatus === 'holiday') holidays.push(date);
+//         else if (record.dayStatus === 'absent') absences.push(date);
+//       } else {
+//         absences.push(date);
+//       }
+//     }
+
+//     const expectedWorkingDays = user.workingDaysNames.length * 4; // Approx 4 weeks
+//     // const absenceDeduction = absences.length * (user.salary / expectedWorkingDays) * user.absenceDeductionRate;
+//     const absenceDeduction = absences.length * (user.salary / expectedWorkingDaysInMonth) * user.absenceDeductionRate;
+//     const lateDeduction = (totalLateMinutes / 60) * (user.salary / (expectedWorkingDaysInMonth * user.workingHoursPerDay)) * user.lateDeductionRate;
+//     const earlyDeduction = (totalEarlyLeaveMinutes / 60) * (user.salary / (expectedWorkingDaysInMonth * user.workingHoursPerDay)) * user.earlyLeaveDeductionRate;
+//     const netSalary = user.salary - absenceDeduction - lateDeduction - earlyDeduction;
+
+//     res.json({
+//       workingDays: workingDays.length,
+//       holidays: holidays.length,
+//       absences: absences.length,
+//       totalLateMinutes,
+//       totalEarlyLeaveMinutes,
+//       deductions: { absence: absenceDeduction, late: lateDeduction, early: earlyDeduction },
+//       netSalary,
+//       records: attendance,
+//     });
+//   } catch (err) {
+//     console.error('Error generating report:', err);
+//     res.status(500).json({ message: 'Failed to generate report', error: err.message });
+//   }
+// };
+
+
+// تحديث userController.js - getMonthlyReport function
+
 exports.getMonthlyReport = async (req, res) => {
   try {
     const { userId, year, month } = req.params;
@@ -168,6 +241,28 @@ exports.getMonthlyReport = async (req, res) => {
 
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // حساب ساعات العمل اليومية من أوقات الدوام
+    const calculateWorkingHours = (startTime, endTime, isNightShift = false) => {
+      const [startHour, startMin] = startTime.split(':').map(Number);
+      const [endHour, endMin] = endTime.split(':').map(Number);
+      
+      let startMinutes = startHour * 60 + startMin;
+      let endMinutes = endHour * 60 + endMin;
+      
+      // في حالة الورديات الليلية
+      if (isNightShift && endHour < startHour) {
+        endMinutes += 24 * 60; // إضافة 24 ساعة
+      }
+      
+      return (endMinutes - startMinutes) / 60; // العودة بالساعات
+    };
+
+    const actualWorkingHours = calculateWorkingHours(
+      user.workStartTime, 
+      user.workEndTime, 
+      user.isNightShift
+    );
 
     const attendance = await Attendance.find({
       user: userId,
@@ -180,40 +275,99 @@ exports.getMonthlyReport = async (req, res) => {
     let totalLateMinutes = 0;
     let totalEarlyLeaveMinutes = 0;
 
+    // حساب الأيام العاملة المتوقعة في الشهر الفعلي
+    let expectedWorkingDaysInMonth = 0;
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month - 1, day);
       const dayName = date.toLocaleString('en-us', { weekday: 'long' });
-      if (!user.workingDaysNames.includes(dayName)) continue; // Skip non-working days
+      
+      if (user.workingDaysNames.includes(dayName)) {
+        expectedWorkingDaysInMonth++;
+        
+        const record = attendance.find(
+          (r) => new Date(r.checkInTime).toDateString() === date.toDateString()
+        );
+        
+        if (record) {
+          if (record.dayStatus === 'working') {
+            workingDays.push(date);
+            
+            // حساب دقائق التأخير
+            const workStart = new Date(date);
+            const [startHour, startMin] = user.workStartTime.split(':').map(Number);
+            workStart.setHours(startHour, startMin, 0, 0);
+            const lateMs = record.checkInTime - workStart;
+            if (lateMs > 0) totalLateMinutes += Math.floor(lateMs / 60000);
 
-      const record = attendance.find(
-        (r) => new Date(r.checkInTime).toDateString() === date.toDateString()
-      );
-      if (record) {
-        if (record.dayStatus === 'working') {
-          workingDays.push(date);
-          totalLateMinutes += record.lateMinutes || 0;
-          totalEarlyLeaveMinutes += record.earlyLeaveMinutes || 0;
-        } else if (record.dayStatus === 'holiday') holidays.push(date);
-        else if (record.dayStatus === 'absent') absences.push(date);
-      } else {
-        absences.push(date);
+            // حساب دقائق الانصراف المبكر
+            if (record.checkOutTime) {
+              const workEnd = new Date(date);
+              const [endHour, endMin] = user.workEndTime.split(':').map(Number);
+              workEnd.setHours(endHour, endMin, 0, 0);
+              
+              // تعديل للورديات الليلية
+              if (user.isNightShift && endHour < startHour) {
+                workEnd.setDate(workEnd.getDate() + 1);
+              }
+              
+              const earlyMs = workEnd - record.checkOutTime;
+              if (earlyMs > 0) totalEarlyLeaveMinutes += Math.floor(earlyMs / 60000);
+            }
+          } else if (record.dayStatus === 'holiday') {
+            holidays.push(date);
+          } else if (record.dayStatus === 'absent') {
+            absences.push(date);
+          }
+        } else {
+          absences.push(date);
+        }
       }
     }
 
-    const expectedWorkingDays = user.workingDaysNames.length * 4; // Approx 4 weeks
-    const absenceDeduction = absences.length * (user.salary / expectedWorkingDays) * user.absenceDeductionRate;
-    const lateDeduction = (totalLateMinutes / 60) * (user.salary / (expectedWorkingDays * user.workingHoursPerDay)) * user.lateDeductionRate;
-    const earlyDeduction = (totalEarlyLeaveMinutes / 60) * (user.salary / (expectedWorkingDays * user.workingHoursPerDay)) * user.earlyLeaveDeductionRate;
-    const netSalary = user.salary - absenceDeduction - lateDeduction - earlyDeduction;
+    // حساب الخصومات بناءً على النسب الصحيحة
+    const dailySalary = user.salary / expectedWorkingDaysInMonth;
+    const hourlySalary = dailySalary / actualWorkingHours;
+
+    // خصم الغياب: نسبة من الراتب الإجمالي
+    const absenceDeduction = absences.length * dailySalary * user.absenceDeductionRate;
+    
+    // خصم التأخير: نسبة من الراتب بناءً على الساعات
+    const lateHours = totalLateMinutes / 60;
+    const lateDeduction = lateHours * hourlySalary * user.lateDeductionRate;
+    
+    // خصم الانصراف المبكر: نسبة من الراتب بناءً على الساعات
+    const earlyLeaveHours = totalEarlyLeaveMinutes / 60;
+    const earlyDeduction = earlyLeaveHours * hourlySalary * user.earlyLeaveDeductionRate;
+    
+    const totalDeductions = absenceDeduction + lateDeduction + earlyDeduction;
+    const netSalary = user.salary - totalDeductions;
 
     res.json({
-      workingDays: workingDays.length,
+      period: { year, month },
+      expectedWorkingDays: expectedWorkingDaysInMonth,
+      actualWorkingDays: workingDays.length,
       holidays: holidays.length,
       absences: absences.length,
-      totalLateMinutes,
-      totalEarlyLeaveMinutes,
-      deductions: { absence: absenceDeduction, late: lateDeduction, early: earlyDeduction },
-      netSalary,
+      actualWorkingHours,
+      attendance: {
+        workingDays: workingDays.length,
+        totalLateMinutes,
+        totalEarlyLeaveMinutes,
+        lateHours: Math.round(lateHours * 100) / 100,
+        earlyLeaveHours: Math.round(earlyLeaveHours * 100) / 100
+      },
+      salary: {
+        baseSalary: user.salary,
+        dailySalary: Math.round(dailySalary * 100) / 100,
+        hourlySalary: Math.round(hourlySalary * 100) / 100
+      },
+      deductions: { 
+        absence: Math.round(absenceDeduction * 100) / 100, 
+        late: Math.round(lateDeduction * 100) / 100, 
+        early: Math.round(earlyDeduction * 100) / 100,
+        total: Math.round(totalDeductions * 100) / 100
+      },
+      netSalary: Math.round(netSalary * 100) / 100,
       records: attendance,
     });
   } catch (err) {
@@ -221,7 +375,6 @@ exports.getMonthlyReport = async (req, res) => {
     res.status(500).json({ message: 'Failed to generate report', error: err.message });
   }
 };
-
 // authController.js - exports.registerUser المحدث
 exports.registerUser = async (req, res) => {
   try {

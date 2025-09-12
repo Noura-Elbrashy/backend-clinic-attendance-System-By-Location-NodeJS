@@ -19,7 +19,7 @@ const attendanceSchema = new mongoose.Schema({
     type: String,
     required: true 
   },
-  deviceId: String, // معرف الجهاز الأساسي
+  deviceId: String, 
   deviceInfo: {
     userAgent: String,
     platform: String,
@@ -77,7 +77,7 @@ const attendanceSchema = new mongoose.Schema({
     default: 100
   },
   
-  // معلومات إضافية
+ 
   metadata: {
     type: mongoose.Schema.Types.Mixed
   }
