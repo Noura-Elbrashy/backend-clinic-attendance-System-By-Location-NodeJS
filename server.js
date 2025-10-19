@@ -10,15 +10,28 @@ const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const branchRoutes = require("./routes/branchRoutes");
 const reportRoutes = require("./routes/reportRoutes");
+const leaveRoutes = require('./routes/leave.routes');
+
 
 const app = express();
 
 // Middlewares
+// app.use(cors({
+//   origin: "http://localhost:5173",
+//   methods: ["GET", "POST", "PUT", "DELETE"],
+//   allowedHeaders: ["Content-Type", "Authorization"],
+// }));
+
 app.use(cors({
-  origin: "http://localhost:5173",
+  origin: [
+    "http://localhost:5173",
+    "https://deluxe-crumble-cab6eb.netlify.app"
+  ],
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true
 }));
+
 app.use(express.json());
 
 // Routes
@@ -28,7 +41,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/branches", branchRoutes);
 app.use("/api/report",reportRoutes);
-
+app.use('/api/leaves', leaveRoutes);
 // DB Connection
 mongoose
   .connect(process.env.MONGO_URI)
