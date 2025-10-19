@@ -23,10 +23,11 @@ const app = express();
 // }));
 
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://deluxe-crumble-cab6eb.netlify.app"
-  ],
+  // origin: [
+  //   "http://localhost:5173",
+  //   "https://deluxe-crumble-cab6eb.netlify.app"
+  // ]
+    origin: process.env.FRONTEND_URL,
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
